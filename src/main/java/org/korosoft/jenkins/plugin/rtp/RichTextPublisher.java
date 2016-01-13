@@ -59,6 +59,7 @@ import java.io.InputStream;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import jenkins.tasks.SimpleBuildStep;
 
 /**
  * Rich text publisher
@@ -66,7 +67,7 @@ import java.util.regex.Pattern;
  * @author Dmitry Korotkov
  * @since 1.0
  */
-public class RichTextPublisher extends Recorder {
+public class RichTextPublisher extends Recorder implements SimpleBuildStep {
     private static final Log log = LogFactory.getLog(RichTextPublisher.class);
 
     private static final transient Pattern FILE_VAR_PATTERN = Pattern.compile("\\$\\{(file|file_sl):([^\\}]+)\\}", Pattern.CASE_INSENSITIVE);
@@ -147,26 +148,38 @@ public class RichTextPublisher extends Recorder {
 
     @Override
     public boolean perform(AbstractBuild<?, ?> build, Launcher launcher, BuildListener listener) throws InterruptedException, IOException {
+        perform(build, build.getWorkspace(), launcher, listener);
+
+        return true;
+    }
+
+    @Override
+    public void perform(Run<?, ?> run, FilePath dirPath, Launcher launcher, TaskListener listener) throws InterruptedException, IOException {
         final String text;
-        if (build.getResult().isBetterOrEqualTo(Result.SUCCESS)) {
+        Result result = run.getResult();
+        if (result == null || result.isBetterOrEqualTo(Result.SUCCESS)) {
             text = stableText;
-        } else if (build.getResult().isBetterOrEqualTo(Result.UNSTABLE)) {
+        } else if (result.isBetterOrEqualTo(Result.UNSTABLE)) {
             text = unstableAsStable ? stableText : unstableText;
         } else {
             text = failedAsStable ? stableText : failedText;
         }
 
         Map<String, String> vars = new HashMap<String, String>();
-        for (Map.Entry<String, String> entry : build.getEnvironment(listener).entrySet()) {
+        for (Map.Entry<String, String> entry : run.getEnvironment(listener).entrySet()) {
             vars.put(String.format("ENV:%s", entry.getKey()), entry.getValue());
         }
-        vars.putAll(build.getBuildVariables());
+        
+        if (run instanceof AbstractBuild<?, ?>) {
+            AbstractBuild<?, ?> build = (AbstractBuild<?, ?>)run;
+            vars.putAll(build.getBuildVariables());
+        }
 
         Matcher matcher = FILE_VAR_PATTERN.matcher(text);
         int start = 0;
         while (matcher.find(start)) {
             String fileName = matcher.group(2);
-            FilePath filePath = new FilePath(build.getWorkspace(), fileName);
+            FilePath filePath = new FilePath(dirPath, fileName);
             if (filePath.exists()) {
                 String value = filePath.readToString();
                 if (matcher.group(1).length() != 4) { // Group is file_sl
@@ -177,11 +190,9 @@ public class RichTextPublisher extends Recorder {
             start = matcher.end();
         }
 
-        AbstractRichTextAction action = new BuildRichTextAction(build, getMarkupParser().parse(replaceVars(text, vars)));
-        build.addAction(action);
-        build.save();
-
-        return true;
+        AbstractRichTextAction action = new BuildRichTextAction(run, getMarkupParser().parse(replaceVars(text, vars)));
+        run.addAction(action);
+        run.save();
     }
 
     private MarkupParser getMarkupParser() {

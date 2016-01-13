@@ -34,7 +34,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
  */
 
-import hudson.model.AbstractBuild;
+import hudson.model.Run;
 
 /**
  * Rich text action for builds
@@ -43,7 +43,7 @@ import hudson.model.AbstractBuild;
  * @since 1.0
  */
 public class BuildRichTextAction extends AbstractRichTextAction {
-    private final AbstractBuild<?, ?> build;
+    private final Run<?, ?> run;
     private final String richText;
 
     @Override
@@ -52,12 +52,12 @@ public class BuildRichTextAction extends AbstractRichTextAction {
     }
 
     @Override
-    public AbstractBuild<?, ?> getBuild() {
-        return build;
+    public Run<?, ?> getBuild() {
+        return run;
     }
 
-    public BuildRichTextAction(AbstractBuild<?, ?> build, String richText) {
-        this.build = build;
+    public BuildRichTextAction(Run<?, ?> build, String richText) {
+        this.run = build;
         this.richText = richText;
     }
 
